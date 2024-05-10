@@ -1,7 +1,7 @@
 # -*- coding: utf-8-*-
 
 ###### MMT IndeX #######
-## Version 0.1 ##
+## Version 0.1.1 ##
 
 # Standard library imports
 import os
@@ -205,8 +205,6 @@ class MMT ():
             raise ValueError("ERROR: Control variable not found in input data")
         if 'Exposed' not in data.columns:
             raise ValueError("ERROR: Exposed variable not found in input data")
-        if ['Exposed', 'Control'] != list(data.columns):
-            raise ValueError("ERROR: Exposed and Control variables out of order in input data")
         if data['Control'].isna().any():
             raise ValueError("ERROR: NAs found in the Control variable")
         if data['Exposed'].isna().any():
