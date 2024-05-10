@@ -671,118 +671,127 @@ class MMT ():
             x1 = x1.rename(columns={metric: 'x1'})
             x1.index = pd.to_datetime(x1['Date'])
             x1 = x1.drop(columns=["Date"])
+            len_x1 = x1.shape[0]
 
             # Get the data for the second DMA
             y = data[data['DMA'] == dma2][['Date', metric]].sort_values(by=['Date']).reset_index(drop=True)
             y = y.rename(columns={metric: 'y'})
             y.index = pd.to_datetime(y['Date'])
             y = y.drop(columns=["Date"])
+            len_y = y.shape[0]
 
-            # Merge the data
-            dat1 = dat.join(x1, how='left')
-            dat1 = dat1.join(y, how='left')
-            dat1 = dat1.drop(columns=['tmp'])
-            dat1 = dat1.rename(columns={'x1': 'y', 'y': 'x'})
-            dat1 = dat1.sort_index()
-            dat1 = dat1.reset_index(drop=False)
-            dat1['Date'] = pd.to_datetime(dat1['Date'])
-            dat1 = dat1.fillna(0)
+            if (len_x1==0) or (len_y==0):
+                if exp_details:
+                    results = [pair, np.nan, np.nan, np.nan]
+                else:
+                    results = [pair, np.nan]
 
-            # Plot the results
-            if plots:
-                fig, ax = plt.subplots()
-                fig.set_size_inches(30, 8)
+            else:
+                # Merge the data
+                dat1 = dat.join(x1, how='left')
+                dat1 = dat1.join(y, how='left')
+                dat1 = dat1.drop(columns=['tmp'])
+                dat1 = dat1.rename(columns={'x1': 'y', 'y': 'x'})
+                dat1 = dat1.sort_index()
+                dat1 = dat1.reset_index(drop=False)
+                dat1['Date'] = pd.to_datetime(dat1['Date'])
+                dat1 = dat1.fillna(0)
 
-                ax.plot(dat1.Date[1:], dat1['y'][1:], color='black', label=dma1, linewidth=2)
-                ax.plot(dat1.Date[1:], dat1['x'][1:], '--', color='blue', label=dma2, linewidth=2)
-                ax.axvline(pd.to_datetime(pre_period[1]), color='red', linestyle='--', label='Post-Period Start')
+                # Plot the results
+                if plots:
+                    fig, ax = plt.subplots()
+                    fig.set_size_inches(30, 8)
 
-                ax.set_xlabel('Date', fontsize=16)
-                ax.tick_params(axis='x', which='major', labelsize=16)
-                ax.tick_params(axis='y', which='major', labelsize=16)
-                ax.legend(fontsize=12)
-                ax.grid(True)
+                    ax.plot(dat1.Date[1:], dat1['y'][1:], color='black', label=dma1, linewidth=2)
+                    ax.plot(dat1.Date[1:], dat1['x'][1:], '--', color='blue', label=dma2, linewidth=2)
+                    ax.axvline(pd.to_datetime(pre_period[1]), color='red', linestyle='--', label='Post-Period Start')
 
-                # save the plot
-                fig.savefig(f"{self.work_dir}/Plots/Data_Plot_{dma1}_{dma2}.png", dpi=300)
+                    ax.set_xlabel('Date', fontsize=16)
+                    ax.tick_params(axis='x', which='major', labelsize=16)
+                    ax.tick_params(axis='y', which='major', labelsize=16)
+                    ax.legend(fontsize=12)
+                    ax.grid(True)
 
-                # to avoid plotting the image in the notebook
-                plt.close()
+                    # save the plot
+                    fig.savefig(f"{self.work_dir}/Plots/Data_Plot_{dma1}_{dma2}.png", dpi=300)
 
-            # Run the causal impact model hmc
-            dated_data = dat1.copy()
-            dated_data['Date'] = pd.to_datetime(dated_data['Date'])
-            dated_data.index = dated_data['Date']
-            dated_data = dated_data.drop(columns=['Date'])
+                    # to avoid plotting the image in the notebook
+                    plt.close()
 
-            try:
-                impact = CausalImpact(dated_data, pre_period, post_period, model_args={'prior_level_sd':np.std(dated_data['y'].values), 'fit_method': 'vi'})
-            except Exception as e:
-                print(e)
+                # Run the causal impact model hmc
+                dated_data = dat1.copy()
+                dated_data['Date'] = pd.to_datetime(dated_data['Date'])
+                dated_data.index = dated_data['Date']
+                dated_data = dated_data.drop(columns=['Date'])
 
-            if exp_details:
-                report_text = impact.summary(output = "report")
+                try:
+                    impact = CausalImpact(dated_data, pre_period, post_period, model_args={'prior_level_sd':np.std(dated_data['y'].values), 'fit_method': 'vi'})
+                except Exception as e:
+                    print(e)
 
-                # Extract the values
-                overall_value, sum_of = self.parse_causal_impact_summary(report_text)
+                if exp_details:
+                    report_text = impact.summary(output = "report")
 
-            # Examine the results
-            res = pd.DataFrame(impact.inferences)
-            res['y'] = impact.data['y']
-            res = res.reset_index(drop=False)
+                    # Extract the values
+                    overall_value, sum_of = self.parse_causal_impact_summary(report_text)
 
-            # Plot the results
-            if plots:
-                fig, ax = plt.subplots()
-                fig.set_size_inches(30, 8)
+                # Examine the results
+                res = pd.DataFrame(impact.inferences)
+                res['y'] = impact.data['y']
+                res = res.reset_index(drop=False)
 
-                ax.plot(res['Date'][1:], res['y'][1:], color='black', label='y', linewidth=2)
-                ax.plot(res['Date'][1:], res['preds'][1:], '--', color='blue', label='Predicted', linewidth=2)
-                ax.fill_between(res['Date'][1:], res['preds_lower'][1:], res['preds_upper'][1:], color='blue', alpha=0.3)
-                ax.axvline(pre_period[1], color='red', linestyle='--', label='Post-Period Start')
+                # Plot the results
+                if plots:
+                    fig, ax = plt.subplots()
+                    fig.set_size_inches(30, 8)
 
-                ax.set_xlabel('Date', fontsize=16)
-                ax.tick_params(axis='x', which='major', labelsize=16)
-                ax.tick_params(axis='y', which='major', labelsize=16)
-                ax.legend(fontsize=12)
-                ax.grid(True)
+                    ax.plot(res['Date'][1:], res['y'][1:], color='black', label='y', linewidth=2)
+                    ax.plot(res['Date'][1:], res['preds'][1:], '--', color='blue', label='Predicted', linewidth=2)
+                    ax.fill_between(res['Date'][1:], res['preds_lower'][1:], res['preds_upper'][1:], color='blue', alpha=0.3)
+                    ax.axvline(pre_period[1], color='red', linestyle='--', label='Post-Period Start')
 
-                # save the plot
-                fig.savefig(f"{self.work_dir}/Plots/CausalImpact_OriginalPlot_{dma1}_{dma2}.png", dpi=300)
+                    ax.set_xlabel('Date', fontsize=16)
+                    ax.tick_params(axis='x', which='major', labelsize=16)
+                    ax.tick_params(axis='y', which='major', labelsize=16)
+                    ax.legend(fontsize=12)
+                    ax.grid(True)
 
-                # to avoid plotting the image in the notebook
-                plt.close()
-            
-            # Plot the results
-            if plots:
-                fig, ax = plt.subplots()
-                fig.set_size_inches(30, 8)
+                    # save the plot
+                    fig.savefig(f"{self.work_dir}/Plots/CausalImpact_OriginalPlot_{dma1}_{dma2}.png", dpi=300)
 
-                ax.plot(res['Date'][1:], res['point_effects'][1:], '--', color='blue', label='Point Effects', linewidth=2)
-                ax.fill_between(res['Date'][1:], res['point_effects_lower'][1:], res['point_effects_upper'][1:], color='blue', alpha=0.3)
-                ax.axhline(0, color='black', linestyle='--')
-                ax.axvline(pre_period[1], color='red', linestyle='--', label='Post-Period Start')
+                    # to avoid plotting the image in the notebook
+                    plt.close()
+                
+                # Plot the results
+                if plots:
+                    fig, ax = plt.subplots()
+                    fig.set_size_inches(30, 8)
+
+                    ax.plot(res['Date'][1:], res['point_effects'][1:], '--', color='blue', label='Point Effects', linewidth=2)
+                    ax.fill_between(res['Date'][1:], res['point_effects_lower'][1:], res['point_effects_upper'][1:], color='blue', alpha=0.3)
+                    ax.axhline(0, color='black', linestyle='--')
+                    ax.axvline(pre_period[1], color='red', linestyle='--', label='Post-Period Start')
 
 
-                ax.set_xlabel('Date', fontsize=16)
-                ax.tick_params(axis='x', which='major', labelsize=16)
-                ax.tick_params(axis='y', which='major', labelsize=16)
-                ax.legend(fontsize=12)
-                ax.grid(True)
+                    ax.set_xlabel('Date', fontsize=16)
+                    ax.tick_params(axis='x', which='major', labelsize=16)
+                    ax.tick_params(axis='y', which='major', labelsize=16)
+                    ax.legend(fontsize=12)
+                    ax.grid(True)
 
-                # save the plot
-                fig.savefig(f"{self.work_dir}/Plots/CausalImpact_PointwisePlot_{dma1}_{dma2}.png", dpi=300)
+                    # save the plot
+                    fig.savefig(f"{self.work_dir}/Plots/CausalImpact_PointwisePlot_{dma1}_{dma2}.png", dpi=300)
 
-                # to avoid plotting the image in the notebook
-                plt.close()
+                    # to avoid plotting the image in the notebook
+                    plt.close()
 
-            # Get the p-value
-            p_value = float(impact.p_value)
+                # Get the p-value
+                p_value = float(impact.p_value)
 
-        if exp_details:
-            results = [pair, p_value, overall_value, sum_of]
-        else:
-            results = [pair, p_value]
+                if exp_details:
+                    results = [pair, p_value, overall_value, sum_of]
+                else:
+                    results = [pair, p_value]
             
         return results
     
