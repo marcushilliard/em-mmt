@@ -3,13 +3,11 @@
 ###### MMT IndeX #######
 ## Version 0.1 ##
 
-# ---- List of Indices -----
-# Read Data
-#
 # Standard library imports
 import os
 import sys
 import time
+import re
 from itertools import combinations, permutations
 
 # Plotting Libraries
@@ -71,12 +69,14 @@ class MMT ():
 
         self.df = pd.DataFrame()
         self.data = pd.DataFrame()
+        self.data_pairs = pd.DataFrame()
         self.markets_to_be_matched = None
         self.matches = 0
         self.dtw_emphasis = 0
         self.shortest_distances = pd.DataFrame()
         self.pairs = None
         self.results = pd.DataFrame()
+        self.df_pairs = pd.DataFrame()
 
     ########################################
     # read dma file
@@ -146,6 +146,24 @@ class MMT ():
             sys.exit(1)
 
     ########################################
+    # read_input_parameters
+    ########################################
+    def read_test_pairs_file (self, work_dir, file_name):
+            ''' Read the csv file '''
+
+            try:
+                # read the csv file
+                df = pd.read_csv(work_dir+"/"+file_name)
+
+                print("Pair Data loaded successfully")
+
+                return df
+
+            except Exception as e:
+                raise e
+        
+
+    ########################################
     # check_inputs
     ########################################
     def check_inputs(self, data=None, id=None, matching_variable=None, date_variable=None):
@@ -175,6 +193,34 @@ class MMT ():
             raise ValueError("ERROR: NAs found in the matching variable")
         if not pd.api.types.is_datetime64_any_dtype(data[date_variable]):
             raise ValueError("ERROR: date_variable is not a Date. Check your data frame or use pd.to_datetime().")
+
+
+    ########################################
+    # check_pair_inputs
+    ########################################
+    def check_pair_inputs(self, data=None):
+        if data is None:
+            raise ValueError("ERROR: No data is provided")
+        if 'Control' not in data.columns:
+            raise ValueError("ERROR: Control variable not found in input data")
+        if 'Exposed' not in data.columns:
+            raise ValueError("ERROR: Exposed variable not found in input data")
+        if ['Exposed', 'Control'] != list(data.columns):
+            raise ValueError("ERROR: Exposed and Control variables out of order in input data")
+        if data['Control'].isna().any():
+            raise ValueError("ERROR: NAs found in the Control variable")
+        if data['Exposed'].isna().any():
+            raise ValueError("ERROR: NAs found in the Exposed variable")
+        if data['Control'].isnull().any():
+            raise ValueError("ERROR: NULLs found in the Control variable")
+        if data['Exposed'].isnull().any():
+            raise ValueError("ERROR: NULLs found in the Exposed variable")
+        if '' in data['Control'].unique():
+            raise ValueError("ERROR: Blanks found in the Control variable")
+        if '' in data['Exposed'].unique():
+            raise ValueError("ERROR: Blanks found in the Exposed variable")
+    
+
 
     ########################################
     # process_data program
@@ -282,6 +328,88 @@ class MMT ():
                     raise Exception(f"test market {k} does not exist")
                 
         return data, markets_to_be_matched, matches, dtw_emphasis
+
+    ########################################
+    # process_intervention_data program
+    ########################################
+    def process_intervention_data(self, data, id_variable, date_variable, matching_variable, start_match_period, end_match_period):
+
+        ## Check the start date and end dates
+        if start_match_period is None:
+            raise ValueError("No start date provided")
+        if end_match_period is None:
+            raise ValueError("No end date provided")
+
+        ## check the inputs
+        if date_variable not in data.columns:
+            raise ValueError("ERROR: date variable not found in input data")
+
+        if len(data[date_variable].dtypes) > 1:
+            if "Date" not in data[date_variable].dtypes:
+                print("NOTE: Date variable converted to Date using pd.to_datetime()")
+                print()
+                data[date_variable] = pd.to_datetime(data[date_variable])
+        elif data[date_variable].dtype != "datetime64[ns]":
+            print("NOTE: Date variable converted to Date using pd.to_datetime()")
+            print()
+            data[date_variable] = pd.to_datetime(data[date_variable])
+
+        # Trim the date variable
+        data[date_variable] = pd.to_datetime(data[date_variable])
+
+        # Check inputs
+        self.check_inputs(data=data, id=id_variable, matching_variable=matching_variable, date_variable=date_variable)
+
+        # Create new columns
+        data['date_var'] = data[date_variable]
+        data['id_var'] = data[id_variable] 
+        data['match_var'] = data[matching_variable]
+
+        # check for duplicates
+        ddup = data.drop_duplicates(subset=['id_var', 'date_var'])
+        if len(ddup) < len(data):
+            raise Exception("ERROR: There are date/market duplicates in the input data")
+        del ddup
+
+        ## reduce the width of the data.frame
+        data = data.sort_values(by=['id_var', 'date_var'])
+        data = data[['id_var', 'date_var', 'match_var']]
+        data = data.reset_index(drop=True)
+        # data.head()
+
+        # Filter rows where date_var is between start_match_period and end_match_period
+        data_filtered = data[(data['date_var'] >= start_match_period) & (data['date_var'] <= end_match_period)]
+        data_filtered = data_filtered.reset_index(drop=True)
+
+        # Group by id_var and calculate the row number within each group, then get the max row number for each group
+        data_filtered['rows'] = data_filtered.groupby('id_var').cumcount()
+        data_filtered['max_row'] = data_filtered.groupby('id_var')['rows'].transform('max')
+
+        # Remove the groupby effect
+        data_filtered = data_filtered.reset_index(drop=True)
+
+        # Calculate the maximum of 'rows' across the entire DataFrame
+        max_rows = data_filtered['rows'].max()
+
+        # Create the 'short' boolean column
+        data_filtered['short'] = data_filtered['rows'] < max_rows
+
+        # Select the desired columns (dropping 'rows', 'max_rows', and 'short')
+        data = data_filtered.drop(columns=['rows', 'max_row', 'short'])
+
+        # Check if any data is left
+        if data.shape[0] == 0:
+            raise Exception("ERROR: no data left after filter for dates")
+                
+        return data
+
+    ########################################
+    # process_pair_data program
+    ########################################
+    def process_pair_data(self, data):
+        # Check inputs
+        self.check_pair_inputs(data=data)
+        return data
     
     ########################################
     # create_market_vectors program
@@ -408,6 +536,33 @@ class MMT ():
             return False
         else:
             return True
+        
+    ########################################
+    # calculate_post_validity program
+    ########################################
+    def calculate_post_validity(self, p_value, pval_threshold):
+
+        """
+        Null Hypothesis (H0): The intervention (such as a new policy, marketing campaign, event, etc.) 
+         has an effect on the outcome metric of interest over the time period being considered.
+        
+        Compare P-value to Alpha: 
+         If the p-value ≤ α: There is sufficient statistical evidence to reject the null hypothesis. 
+           This implies that the observed data are unlikely under the assumption that the null 
+            hypothesis is true.
+         If the p-value > α: There is not enough statistical evidence to reject the null hypothesis. 
+           This suggests that the observed data are not sufficiently extreme to consider them 
+           unlikely under the null hypothesis.
+        """
+
+        # After the test is completed, we want there to be a significant difference between the two markets
+        #   so we want the p-value to be less than the threshold, which is why if the p_value 
+        #   is greater than the pval_threshold then to return False
+
+        if p_value <= pval_threshold:
+            return True
+        else:
+            return False
 
 
     ########################################
@@ -449,22 +604,22 @@ class MMT ():
     ########################################
     def calculate_causal_impact_for_pair(self, args):
         # Unpack the arguments
-        data, metric, pair, pre_period, post_period, plots = args
+        data, metric, pair, pre_period, post_period, plots, exp_details = args
         # Call the calculate_causal_impact function with the unpacked arguments
-        return self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots)
+        return self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots, exp_details)
 
 
     ########################################
     # process_pairs_in_parallel program
     ########################################
-    def process_pairs_in_parallel(self, data, metric, pairs, pre_period, post_period, plots, num_processes=None):
+    def process_pairs_in_parallel(self, data, metric, pairs, pre_period, post_period, plots, exp_details, num_processes=None):
         # Determine the number of processes to use
         if num_processes is None:
             num_processes = multiprocessing.cpu_count()
 
         # Prepare arguments for each pair
         args_list = [
-            (data, metric, pairs[i], pre_period, post_period, plots)
+            (data, metric, pairs[i], pre_period, post_period, plots, exp_details)
             for i in range(len(pairs))
         ]
 
@@ -477,7 +632,7 @@ class MMT ():
     ########################################
     # calculate_causal_impact program
     ########################################
-    def calculate_causal_impact(self, data, metric, pair, pre_period, post_period, plots):
+    def calculate_causal_impact(self, data, metric, pair, pre_period, post_period, plots, exp_details):
         results = []
 
         # print(f"Backtesting | Pair {j}/{len(pairs_test)} | {pair[0]}-{pair[1]}")
@@ -547,7 +702,13 @@ class MMT ():
             try:
                 impact = CausalImpact(dated_data, pre_period, post_period, model_args={'prior_level_sd':np.std(dated_data['y'].values), 'fit_method': 'vi'})
             except Exception as e:
-                print("Error in Casual Impact Calculation", e)
+                print(e)
+
+            if exp_details:
+                report_text = impact.summary(output = "report")
+
+                # Extract the values
+                overall_value, sum_of = self.parse_causal_impact_summary(report_text)
 
             # Examine the results
             res = pd.DataFrame(impact.inferences)
@@ -602,27 +763,47 @@ class MMT ():
             # Get the p-value
             p_value = float(impact.p_value)
 
-        results = [pair, p_value]
+        if exp_details:
+            results = [pair, p_value, overall_value, sum_of]
+        else:
+            results = [pair, p_value]
             
         return results
-
+    
 
     ########################################
     # causal_impact_iter program
     ########################################
-    def causal_impact_iter(self, data, metric, pairs_test, pre_period, post_period, plots):
+    def causal_impact_iter(self, data, metric, pairs_test, pre_period, post_period, plots, exp_details):
         results = []
         for j in tqdm(range(len(pairs_test)), desc="Processing", ascii=False, ncols=75):
             
             pair = pairs_test[j]
 
-            tmp_results = self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots)
+            tmp_results = self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots, exp_details)
 
             results.append(tmp_results)
                 
         return results
 
 
+    ########################################
+    # parse causal impact summary
+    ########################################
+    def parse_causal_impact_summary(self, report):
+        # Regular expressions for the desired values, adjusted to avoid trailing non-numeric characters
+        overall_value_pattern = r"overall value of ([\d.]+)"
+        sum_of_pattern = r"sum of ([\d.]+)"
+
+        # Search for the patterns and extract values
+        overall_value_match = re.search(overall_value_pattern, report)
+        sum_of_match = re.search(sum_of_pattern, report)
+
+        # Extracting matched values and removing any trailing periods
+        overall_value = float(overall_value_match.group(1).rstrip('.')) if overall_value_match else None
+        sum_of = float(sum_of_match.group(1).rstrip('.')) if sum_of_match else None
+
+        return overall_value, sum_of
 
 
 
@@ -740,7 +921,8 @@ class MMT ():
                                             pairs_test = self.pairs, 
                                             pre_period = [pre_period_start, pre_period_end], 
                                             post_period = [post_period_start, post_period_end],
-                                            plots = gmm_plots)
+                                            plots = gmm_plots,
+                                            exp_details = False)
                 
                 # Create DataFrame for results
                 self.results = pd.DataFrame(columns=["DMA1", "DMA2", "Valid", "Train P-value", "Correlation", "Relative Distance"])
@@ -770,6 +952,7 @@ class MMT ():
                                                         pre_period = [pre_period_start, pre_period_end], 
                                                         post_period = [post_period_start, post_period_end],
                                                         plots = gmm_plots,
+                                                        exp_details = False,
                                                         num_processes=self.num_processes)
                 p1 = time.time()
                 totalPTime = (p1-p0)/60
@@ -792,6 +975,137 @@ class MMT ():
 
             print("Saving results")
             save_path = self.work_dir+"/"+initials+"_"+brand+"_"+campaign+"_Market_Pairs_"+str(date.today())+".csv"
+            self.results.to_csv(save_path)
+
+            return self.results
+
+        except Exception as e:
+            print("Function::Get Market Matches failed: %s", e)
+            sys.exit(1)
+
+    ########################################
+    # intervention program
+    ########################################
+    def intervention (self, data_dir: str, dma_fName: str, gmm_metric: str,  
+                            gmm_pName: str, pval_threshold: float, 
+                           pre_period_start: str, pre_period_end: str, 
+                           post_period_start: str, post_period_end: str, 
+                           initials: str, campaign: str, brand: str,
+                           gmm_plots: bool = False, parallel_processing: bool = True):
+        '''
+        Driver program 
+        '''
+        try:
+            
+            # Check if the data directory exists
+            if not self.check_paths_exist("./" + data_dir):
+                sys.exit(1)
+
+            # Assign the work directory
+            self.work_dir = "./" + data_dir
+
+            # Determine the number of cores
+            self.num_processes = multiprocessing.cpu_count()
+
+            # Check if the plot directory exists
+            if gmm_plots:
+                _ = self.check_paths_exist(self.work_dir + "/Plots")
+
+            # Check if the p-value thresholds are between 0 and 1
+            self.check_threshold(pval_threshold, "P-value", 0, 1)
+
+            # Ready input data
+            self.df = self.read_input_parameters(self.work_dir, dma_fName, gmm_metric)
+
+            # Process Input Data
+            self.data = self.process_intervention_data(data = self.df.copy(), 
+                    id_variable = "DMA", 
+                    date_variable = "Date", 
+                    matching_variable = gmm_metric, 
+                    start_match_period = pre_period_start, 
+                    end_match_period = pre_period_end)
+
+            # Ready pair input data
+            self.df_pairs = self.read_test_pairs_file(self.work_dir, gmm_pName)
+
+            # Process Pair Input Data
+            self.data_pairs = self.process_pair_data(data = self.df_pairs.copy())
+
+            # Determine the pairs to be tested based on the resuls of the matching
+            self.pairs = [None] * len(self.data_pairs)
+            print("Number of market pairs: ", len(self.pairs))
+
+            for i in range(len(self.pairs)):
+                self.pairs[i] = [self.data_pairs.loc[i, 'Exposed'], self.data_pairs.loc[i, 'Control']]
+
+            print("The first five pairs:")
+            for i in range(0,5):
+                print("Pair: ", self.pairs[i])
+
+            print("######## Determining Casual Impact ########")
+
+            # User chose not to use multiprocessing
+            if not parallel_processing:
+
+                back_test = self.causal_impact_iter(data = self.df.copy(),
+                                            metric = gmm_metric, 
+                                            pairs_test = self.pairs, 
+                                            pre_period = [pre_period_start, pre_period_end], 
+                                            post_period = [post_period_start, post_period_end],
+                                            plots = gmm_plots,
+                                            exp_details = True)
+                
+                # Create DataFrame for results
+                self.results = pd.DataFrame(columns=["Control", "Exposed", "Actual", "Predicted", "Test P-value", "Valid"])
+
+                for i in range(len(back_test)):
+                    pair = back_test[i][0]
+                    p_value = back_test[i][1]
+                    overall_value = back_test[i][2]
+                    sum_of = back_test[i][3]
+                    self.results.loc[i, "Control"] = pair[1]
+                    self.results.loc[i, "Exposed"] = pair[0]
+                    self.results.loc[i, "Actual"] = overall_value
+                    self.results.loc[i, "Predicted"] = sum_of
+                    self.results.loc[i, "Test P-value"] = p_value
+                    self.results.loc[i, "Valid"] = self.calculate_post_validity(p_value, pval_threshold)
+
+
+            # User chose to use multiprocessing
+            if parallel_processing:
+                
+                print("Start Multiprocessing")
+                p0 = time.time()
+                print("Distributing the work to {} cores".format(self.num_processes))
+                back_test = self.process_pairs_in_parallel(data = self.df.copy(),
+                                                        metric = gmm_metric, 
+                                                        pairs = self.pairs, 
+                                                        pre_period = [pre_period_start, pre_period_end], 
+                                                        post_period = [post_period_start, post_period_end],
+                                                        plots = gmm_plots,
+                                                        exp_details = True,
+                                                        num_processes=self.num_processes)
+                p1 = time.time()
+                totalPTime = (p1-p0)/60
+                print("Multiprocessing Time {:.2f} min".format(totalPTime))
+
+                # Create DataFrame for results
+                self.results = pd.DataFrame(columns=["Control", "Exposed", "Actual", "Predicted", "Test P-value", "Valid"])
+
+                for i in range(len(back_test)):
+                    pair = back_test[i][0]
+                    p_value = back_test[i][1]
+                    overall_value = back_test[i][2]
+                    sum_of = back_test[i][3]
+                    self.results.loc[i, "Control"] = pair[1]
+                    self.results.loc[i, "Exposed"] = pair[0]
+                    self.results.loc[i, "Actual"] = overall_value
+                    self.results.loc[i, "Predicted"] = sum_of
+                    self.results.loc[i, "Test P-value"] = p_value
+                    self.results.loc[i, "Valid"] = self.calculate_post_validity(p_value, pval_threshold)
+
+            print("Saving results")
+            save_path = self.work_dir+"/"+initials+"_"+brand+"_"+campaign+"_Test_Market_Pairs_"+str(date.today())+".csv"
             self.results.to_csv(save_path)
 
             return self.results
