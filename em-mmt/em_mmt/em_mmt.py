@@ -1,7 +1,7 @@
 # -*- coding: utf-8-*-
 
 ###### MMT IndeX #######
-## Version 0.1.1 ##
+## Version 0.1.2 ##
 
 # Standard library imports
 import os
@@ -621,6 +621,15 @@ class MMT ():
             for i in range(len(pairs))
         ]
 
+        print("Estimating cycle time...")
+        ts0 = time.time()
+        _ = self.calculate_causal_impact_for_pair(args_list[0])
+        ts1 = time.time()
+        totalPTime = (ts0-ts1)/60
+        totalPTimeCore = (totalPTime*len(args_list))/num_processes
+
+        print(f"Estimated total time per core is {np.round_(totalPTimeCore,2)} min or {np.round_(totalPTimeCore/60,2)} hr")
+
         # Create a Pool of workers and map the function to the arguments
         with multiprocessing.Pool(processes=num_processes) as pool:
             results = list(tqdm(pool.imap(self.calculate_causal_impact_for_pair, args_list), total=len(args_list), desc="Processing", ascii=False, ncols=75))
@@ -905,9 +914,18 @@ class MMT ():
             for i in range(len(self.pairs)):
                 self.pairs[i] = [self.shortest_distances.loc[i, 'DMA'], self.shortest_distances.loc[i, 'BestControl']]
 
-            print("The first five pairs:")
-            for i in range(0,5):
-                print("Pair: ", self.pairs[i])
+            try:
+                if len(self.pairs) >= 5:
+                    print("The first five pairs:")
+                    for i in range(0,5):
+                        print("Pair: ", self.pairs[i])
+                else:
+                    print(f"The first {len(self.pairs)} pairs:")
+                    for i in range(len(self.pairs)):
+                        print("Pair: ", self.pairs[i])
+            except Exception as e:
+                print("Function::Print Pairs failed: %s", e)
+                sys.exit(1)
 
             print("######## Determining Casual Impact ########")
 
@@ -1036,9 +1054,18 @@ class MMT ():
             for i in range(len(self.pairs)):
                 self.pairs[i] = [self.data_pairs.loc[i, 'Exposed'], self.data_pairs.loc[i, 'Control']]
 
-            print("The first five pairs:")
-            for i in range(0,5):
-                print("Pair: ", self.pairs[i])
+            try:
+                if len(self.pairs) >= 5:
+                    print("The first five pairs:")
+                    for i in range(0,5):
+                        print("Pair: ", self.pairs[i])
+                else:
+                    print(f"The first {len(self.pairs)} pairs:")
+                    for i in range(len(self.pairs)):
+                        print("Pair: ", self.pairs[i])
+            except Exception as e:
+                print("Function::Print Pairs failed: %s", e)
+                sys.exit(1)
 
             print("######## Determining Casual Impact ########")
 
