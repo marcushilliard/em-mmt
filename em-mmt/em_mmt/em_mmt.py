@@ -1,7 +1,7 @@
 # -*- coding: utf-8-*-
 
 ###### MMT IndeX #######
-## Version 0.1.2 ##
+## Version 0.1.3 ##
 
 # Standard library imports
 import os
@@ -586,6 +586,15 @@ class MMT ():
             (markets_to_be_matched, data, id_column, i, warping_limit, matches, dtw_emphasis)
             for i in range(len(markets_to_be_matched))
         ]
+
+        print("Estimating cycle time...")
+        ts0 = time.time()
+        _ = self.calculate_distances_for_market(args_list[0])
+        ts1 = time.time()
+        totalPTime = (ts1-ts0)/60
+        totalPTimeCore = (totalPTime*len(args_list))/num_processes
+
+        print(f"Estimated total time per core is {np.round_(totalPTimeCore,2)} min or {np.round_(totalPTimeCore/60,2)} hr")
         
         # Create a Pool of workers and map the function to the arguments
         with multiprocessing.Pool(processes=num_processes) as pool:
@@ -625,7 +634,7 @@ class MMT ():
         ts0 = time.time()
         _ = self.calculate_causal_impact_for_pair(args_list[0])
         ts1 = time.time()
-        totalPTime = (ts0-ts1)/60
+        totalPTime = (ts1-ts0)/60
         totalPTimeCore = (totalPTime*len(args_list))/num_processes
 
         print(f"Estimated total time per core is {np.round_(totalPTimeCore,2)} min or {np.round_(totalPTimeCore/60,2)} hr")
