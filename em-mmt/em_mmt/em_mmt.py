@@ -1,7 +1,7 @@
 # -*- coding: utf-8-*-
 
 ###### MMT IndeX #######
-## Version 0.1.3 ##
+## Version 0.1.4 ##
 
 # Standard library imports
 import os
