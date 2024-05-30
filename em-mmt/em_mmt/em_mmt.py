@@ -1,7 +1,7 @@
 # -*- coding: utf-8-*-
 
 ###### MMT IndeX #######
-## Version 0.1.4 ##
+## Version 0.2.0 ##
 
 # Standard library imports
 import os
@@ -945,7 +945,7 @@ class MMT ():
                 print("Function::Print Pairs failed: %s", e)
                 sys.exit(1)
 
-            print("######## Determining Casual Impact ########")
+            print("######## Determining Causal Impact ########")
 
             # User chose not to use multiprocessing
             if not parallel_processing:
@@ -1085,7 +1085,7 @@ class MMT ():
                 print("Function::Print Pairs failed: %s", e)
                 sys.exit(1)
 
-            print("######## Determining Casual Impact ########")
+            print("######## Determining Causal Impact ########")
 
             # User chose not to use multiprocessing
             if not parallel_processing:
