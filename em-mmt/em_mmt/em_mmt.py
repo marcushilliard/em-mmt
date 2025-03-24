@@ -630,14 +630,14 @@ class MMT ():
             for i in range(len(pairs))
         ]
 
-        print("Estimating cycle time...")
-        ts0 = time.time()
-        _ = self.calculate_causal_impact_for_pair(args_list[0])
-        ts1 = time.time()
-        totalPTime = (ts1-ts0)/60
-        totalPTimeCore = (totalPTime*len(args_list))/num_processes
+        # print("Estimating cycle time...")
+        # ts0 = time.time()
+        # _ = self.calculate_causal_impact_for_pair(args_list[0])
+        # ts1 = time.time()
+        # totalPTime = (ts1-ts0)/60
+        # totalPTimeCore = (totalPTime*len(args_list))/num_processes
 
-        print(f"Estimated total time per core is {np.round_(totalPTimeCore,2)} min or {np.round_(totalPTimeCore/60,2)} hr")
+        # print(f"Estimated total time per core is {np.round_(totalPTimeCore,2)} min or {np.round_(totalPTimeCore/60,2)} hr")
 
         # Create a Pool of workers and map the function to the arguments
         with multiprocessing.Pool(processes=num_processes) as pool:
