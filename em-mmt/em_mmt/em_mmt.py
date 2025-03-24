@@ -683,8 +683,10 @@ class MMT ():
             if (len_x1==0) or (len_y==0):
                 if exp_details:
                     results = [pair, np.nan, np.nan, np.nan]
+                    print(f"Fetch Data Error {dma1}-{dma2}")
                 else:
                     results = [pair, np.nan]
+                    print(f"Fetch Data Error {dma1}-{dma2}")
 
             else:
                 # Merge the data
