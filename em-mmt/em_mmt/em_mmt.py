@@ -724,9 +724,15 @@ class MMT ():
                 dated_data.index = dated_data['Date']
                 dated_data = dated_data.drop(columns=['Date'])
 
+                impact_flag = False
                 try:
                     impact = CausalImpact(dated_data, pre_period, post_period, model_args={'prior_level_sd':np.std(dated_data['y'].values), 'fit_method': 'vi'})
-                
+                    impact_flag = True
+                    
+                except Exception as e:
+                    print(f"Error processing {dma1}-{dma2}: {str(e)}")
+
+                if impact_flag:
                     if exp_details:
                         report_text = impact.summary(output = "report")
 
@@ -790,14 +796,6 @@ class MMT ():
                         results = [pair, p_value, overall_value, sum_of]
                     else:
                         results = [pair, p_value]
-
-                except Exception as e:
-                    print(f"Error processing {dma1}-{dma2}: {str(e)}")
-
-                    if exp_details:
-                        results = [pair, np.nan, np.nan, np.nan]
-                    else:
-                        results = [pair, np.nan]
             
         return results
     
@@ -810,11 +808,11 @@ class MMT ():
         for j in tqdm(range(len(pairs_test)), desc="Processing", ascii=False, ncols=75):
             
             pair = pairs_test[j]
-    
+            
             tmp_results = self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots, exp_details)
 
             results.append(tmp_results)
-
+                
         return results
 
 
