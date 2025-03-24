@@ -804,10 +804,18 @@ class MMT ():
         for j in tqdm(range(len(pairs_test)), desc="Processing", ascii=False, ncols=75):
             
             pair = pairs_test[j]
+            try:
+                tmp_results = self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots, exp_details)
 
-            tmp_results = self.calculate_causal_impact(data, metric, pair, pre_period, post_period, plots, exp_details)
+                results.append(tmp_results)
+            except:
+                if exp_details:
+                    results = [None, None, None, None]
+                    results.append(tmp_results)
+                else:
+                    results = [None, None]
+                    results.append(tmp_results)
 
-            results.append(tmp_results)
                 
         return results
 
