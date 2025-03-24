@@ -728,7 +728,7 @@ class MMT ():
                 try:
                     impact = CausalImpact(dated_data, pre_period, post_period, model_args={'prior_level_sd':np.std(dated_data['y'].values), 'fit_method': 'vi'})
                     impact_flag = True
-                    
+
                 except Exception as e:
                     print(f"Error processing {dma1}-{dma2}: {str(e)}")
 
@@ -796,6 +796,12 @@ class MMT ():
                         results = [pair, p_value, overall_value, sum_of]
                     else:
                         results = [pair, p_value]
+
+                else:
+                    if exp_details:
+                        results = [pair, np.nan, np.nan, np.nan]
+                    else:
+                        results = [pair, np.nan]
             
         return results
     
